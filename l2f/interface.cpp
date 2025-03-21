@@ -21,11 +21,12 @@ using RNG = decltype(rlt::random::default_engine(typename DEVICE::SPEC::RANDOM{}
 using T = float;
 using TI = typename DEVICE::index_t;
 
+// Change action history length
 namespace static_parameter_builder{
     // to prevent spamming the global namespace
     using namespace rl_tools::rl::environments::l2f;
     struct ENVIRONMENT_STATIC_PARAMETERS{
-        static constexpr TI ACTION_HISTORY_LENGTH = 16;
+        static constexpr TI ACTION_HISTORY_LENGTH = 32;
         using STATE_BASE = StateBase<T, TI>;
         using STATE_TYPE = StateRotorsHistory<T, TI, ACTION_HISTORY_LENGTH, StateRandomForce<T, TI, STATE_BASE>>;
         using OBSERVATION_TYPE = observation::Position<observation::PositionSpecification<T, TI,
