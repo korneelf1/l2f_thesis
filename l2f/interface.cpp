@@ -27,8 +27,9 @@ namespace static_parameter_builder{
     using namespace rl_tools::rl::environments::l2f;
     struct ENVIRONMENT_STATIC_PARAMETERS{
         static constexpr TI ACTION_HISTORY_LENGTH = 32;
+        static constexpr bool CLOSED_FORM = false;
         using STATE_BASE = StateBase<T, TI>;
-        using STATE_TYPE = StateRotorsHistory<T, TI, ACTION_HISTORY_LENGTH, StateRandomForce<T, TI, STATE_BASE>>;
+        using STATE_TYPE = StateRotorsHistory<T, TI, ACTION_HISTORY_LENGTH, CLOSED_FORM, StateRandomForce<T, TI, STATE_BASE>>;
         using OBSERVATION_TYPE = observation::Position<observation::PositionSpecification<T, TI,
                 observation::OrientationRotationMatrix<observation::OrientationRotationMatrixSpecification<T, TI,
                         observation::LinearVelocity<observation::LinearVelocitySpecification<T, TI,
@@ -81,7 +82,7 @@ void initialize_rng(Device &device, Rng& rng, TI seed){
 
 void initialize_environment(Device &device, Environment& env, Parameters& parameters){
     rlt::malloc(device.device, env.env);
-    rlt::init(device.device, env.env, parameters.parameters);
+    rlt::init(device.device, env.env);
 }
 
 
@@ -94,7 +95,7 @@ struct State{
     ENVIRONMENT::State state;
 };
 
-void sync(State& state, typename ENVIRONMENT::State& state_real){
+void sync(State& state, const typename ENVIRONMENT::State& state_real){
     state.position[0] = state_real.position[0];
     state.position[1] = state_real.position[1];
     state.position[2] = state_real.position[2];
@@ -129,9 +130,9 @@ void load_config(Device& device, ENVIRONMENT& env, std::string config_string){
 #endif
 
 T step(Device& device, Environment& env, Parameters& parameters, State& state, Action action, State& next_state, Rng& rng){
-    rlt::MatrixStatic<rlt::matrix::Specification<T, TI, 1, ENVIRONMENT::ACTION_DIM>> motor_commands;
+    rlt::Matrix<rlt::matrix::Specification<T, TI, 1, ENVIRONMENT::ACTION_DIM>> motor_commands;
     for(TI action_i=0; action_i < 4; action_i++){
-        set(motor_commands, 0, action_i, action.motor_command[action_i]);
+        rlt::set(motor_commands, 0, action_i, action.motor_command[action_i]);
     }
     T dt = rlt::step(device.device, env.env, parameters.parameters, state.state, motor_commands, next_state.state, rng.rng);
     sync(next_state, next_state.state);
@@ -152,10 +153,10 @@ void sample_initial_state(Device& device, Environment& env, Parameters& paramete
     sync(state, state.state);
 }
 void observe(Device& device, Environment& env, Parameters& parameters, State& state, Observation& observation, Rng& rng){
-    rlt::MatrixStatic<rlt::matrix::Specification<T, TI, 1, ENVIRONMENT::OBSERVATION_DIM>> observation_matrix;
+    rlt::Matrix<rlt::matrix::Specification<T, TI, 1, ENVIRONMENT::OBSERVATION_DIM>> observation_matrix;
     rlt::observe(device.device, env.env, parameters.parameters, state.state, ENVIRONMENT::Observation{}, observation_matrix, rng.rng);
     for(TI observation_i=0; observation_i < ENVIRONMENT::OBSERVATION_DIM; observation_i++){
-        observation.observation[observation_i] = get(observation_matrix, 0, observation_i);
+        observation.observation[observation_i] = rlt::get(observation_matrix, 0, observation_i);
     }
 }
 
