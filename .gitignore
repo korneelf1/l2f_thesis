@@ -4,3 +4,9 @@
 /build
 .vscode/settings.json
 /dist
+
+# Keep external folder but ignore some build artifacts
+external/rl-tools/build/
+external/rl-tools/**/*.so
+external/rl-tools/**/__pycache__
+external/rl-tools/**/*.egg-info
