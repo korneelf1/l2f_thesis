@@ -21,13 +21,17 @@ def get_compile_args():
             if not os.environ.get('CI') and not os.environ.get('COLAB_GPU'):
                 compile_args.append('-ffast-math')
             # Add Ubuntu-specific flags for better compatibility
-            compile_args.extend(['-fPIC', '-std=c++17'])
+            compile_args.extend(['-fPIC', '-std=c++17', '-Wall', '-Wextra'])
+            # Add flags to ensure proper linking with external C++ code
+            compile_args.extend(['-fvisibility=hidden', '-fno-strict-aliasing'])
         else:
             # macOS and other Unix-like systems
             compile_args = ['-O3']
             # Only add -ffast-math if not in a restricted environment
             if not os.environ.get('CI') and not os.environ.get('COLAB_GPU'):
                 compile_args.append('-ffast-math')
+            # Add flags to ensure proper linking with external C++ code
+            compile_args.extend(['-fvisibility=hidden', '-fno-strict-aliasing'])
             if sys.platform == "darwin":
                 compile_args.append('-mmacosx-version-min=10.14')
     
@@ -55,8 +59,36 @@ class ProgressBuildExt(build_ext):
     def run(self):
         print("🚀 Starting L2F package build...")
         print("📦 Installing build dependencies...")
+        
+        # Ensure external dependencies are available
+        self.ensure_external_dependencies()
+        
         super().run()
         print("✅ Build completed successfully!")
+    
+    def ensure_external_dependencies(self):
+        """Ensure external C++ dependencies are properly set up."""
+        print("🔍 Checking external dependencies...")
+        
+        # Check if external/rl-tools exists and has the required files
+        external_path = "external/rl-tools"
+        if not os.path.exists(external_path):
+            print("❌ External rl-tools directory not found!")
+            print("   Make sure you have cloned the repository with external dependencies")
+            raise FileNotFoundError("external/rl-tools directory not found")
+        
+        # Check for key header files
+        key_headers = [
+            "external/rl-tools/include/rl_tools/rl/environments/l2f/parameters/default.h",
+            "external/rl-tools/include/rl_tools/rl/environments/l2f/operations_cpu.h"
+        ]
+        
+        for header in key_headers:
+            if not os.path.exists(header):
+                print(f"❌ Required header not found: {header}")
+                raise FileNotFoundError(f"Required header not found: {header}")
+        
+        print("✅ External dependencies verified")
     
     def build_extension(self, ext):
         print(f"🔨 Building extension: {ext.name}")
@@ -121,7 +153,7 @@ ext_modules = [
 
 setup(
     name="l2f",
-    version="0.0.2",
+    version="2.0.18",
     description="Python bindings for the L2F (Learning to Fly) Simulator",
     author="Jonas Eschmann",
     author_email="jonas.eschmann@gmail.com",
