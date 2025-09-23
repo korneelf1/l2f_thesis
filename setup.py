@@ -248,7 +248,7 @@ ext_modules = [
 
 setup(
     name="l2f",
-    version="2.0.18",
+    version="0.0.2",
     description="Python bindings for the L2F (Learning to Fly) Simulator",
     author="Jonas Eschmann",
     author_email="jonas.eschmann@gmail.com",
