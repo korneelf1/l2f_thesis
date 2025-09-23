@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 from setuptools import setup, find_packages, Extension
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 
@@ -37,9 +38,39 @@ def get_link_args():
         link_args.append('-mmacosx-version-min=10.14')
     return link_args
 
+class ProgressBuildExt(build_ext):
+    """Custom build extension with progress indicators."""
+    
+    def run(self):
+        print("🚀 Starting L2F package build...")
+        print("📦 Installing build dependencies...")
+        super().run()
+        print("✅ Build completed successfully!")
+    
+    def build_extension(self, ext):
+        print(f"🔨 Building extension: {ext.name}")
+        print("   This may take a few minutes...")
+        start_time = time.time()
+        
+        super().build_extension(ext)
+        
+        elapsed = time.time() - start_time
+        print(f"✅ Extension {ext.name} built in {elapsed:.1f} seconds")
+    
+    def build_extensions(self):
+        print("🔧 Configuring build environment...")
+        print(f"   Platform: {sys.platform}")
+        print(f"   Python: {sys.version}")
+        print(f"   Compiler flags: {compile_args}")
+        
+        super().build_extensions()
+
 # Get platform-specific arguments
+print("🔍 Detecting build environment...")
 compile_args = get_compile_args()
 link_args = get_link_args()
+print(f"   Compiler flags: {compile_args}")
+print(f"   Link flags: {link_args}")
 
 ext_modules = [
     Pybind11Extension(
@@ -60,7 +91,7 @@ setup(
     packages=find_packages(include=['l2f']),
     include_package_data=True,
     ext_modules=ext_modules,
-    cmdclass={"build_ext": build_ext},
+    cmdclass={"build_ext": ProgressBuildExt},
     python_requires=">=3.8",
     zip_safe=False,  # Required for compiled extensions
 )
