@@ -1,2 +1,9 @@
-include external/rl-tools/__init__.py
+# Include external rl-tools C++ headers and source files
 recursive-include external/rl-tools/include *
+recursive-include external/rl-tools/src *
+recursive-include external/rl-tools/examples *
+recursive-include external/rl-tools/tests *
+include external/rl-tools/CMakeLists.txt
+include external/rl-tools/README.md
+include external/rl-tools/LICENSE
+include external/rl-tools/*.md

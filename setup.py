@@ -1,6 +1,8 @@
 import sys
 import os
 import time
+import subprocess
+import shutil
 from setuptools import setup, find_packages, Extension
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 
@@ -9,49 +11,48 @@ optimization = True
 
 def get_compile_args():
     """Get compile arguments with fallbacks for different environments."""
-    compile_args = []
-    
+    # Define platform-specific compile and link arguments
     if optimization:
-        if sys.platform == "win32":
-            compile_args = ['/O2', '/fp:fast']
-        elif sys.platform == "linux":
-            # Ubuntu/Linux specific optimizations
-            compile_args = ['-O3', '-DNDEBUG']
-            # Only add -ffast-math if not in a restricted environment
-            if not os.environ.get('CI') and not os.environ.get('COLAB_GPU'):
-                compile_args.append('-ffast-math')
-            # Add Ubuntu-specific flags for better compatibility
-            compile_args.extend(['-fPIC', '-std=c++17', '-Wall', '-Wextra'])
-            # Add flags to ensure proper linking with external C++ code
-            compile_args.extend(['-fvisibility=hidden', '-fno-strict-aliasing'])
-        else:
-            # macOS and other Unix-like systems
-            compile_args = ['-O3']
-            # Only add -ffast-math if not in a restricted environment
-            if not os.environ.get('CI') and not os.environ.get('COLAB_GPU'):
-                compile_args.append('-ffast-math')
-            # Add flags to ensure proper linking with external C++ code
-            compile_args.extend(['-fvisibility=hidden', '-fno-strict-aliasing'])
-            if sys.platform == "darwin":
-                compile_args.append('-mmacosx-version-min=10.14')
+        compile_args = {
+            'msvc': ['/O2', '/fp:fast'],
+            'unix': ['-Ofast', '-march=native'],
+            'macos': ['-Ofast', '-march=native', '-mmacosx-version-min=10.14'],
+        }
+    else:
+        compile_args = {
+            'msvc': [],
+            'unix': [],
+            'macos': [],
+        }
     
     if debug:
-        if sys.platform == "win32":
-            compile_args.extend(['/Zi', '/Od', '/D_DEBUG'])
-        else:
-            compile_args.extend(['-g', '-D_DEBUG'])
+        compile_args['msvc'] += ['/Zi', '/Od', '/D_DEBUG']
+        compile_args['unix'] += ['-g', '-D_DEBUG']
+        compile_args['macos'] += ['-g', '-D_DEBUG']
     
-    return compile_args
+    # Determine the platform and select the appropriate arguments
+    if sys.platform == "win32":
+        return compile_args['msvc']
+    elif sys.platform == "darwin":
+        return compile_args['macos']
+    else:
+        return compile_args['unix']
 
 def get_link_args():
     """Get link arguments."""
-    link_args = []
-    if sys.platform == "darwin":
-        link_args.append('-mmacosx-version-min=10.14')
-    elif sys.platform == "linux":
-        # Ubuntu/Linux specific link flags
-        link_args.extend(['-fPIC', '-shared'])
-    return link_args
+    link_args = {
+        'msvc': [],
+        'unix': [],
+        'macos': [],
+    }
+    
+    # Determine the platform and select the appropriate arguments
+    if sys.platform == "win32":
+        return link_args['msvc']
+    elif sys.platform == "darwin":
+        return link_args['macos']
+    else:
+        return link_args['unix']
 
 class ProgressBuildExt(build_ext):
     """Custom build extension with progress indicators."""
@@ -62,6 +63,9 @@ class ProgressBuildExt(build_ext):
         
         # Ensure external dependencies are available
         self.ensure_external_dependencies()
+        
+        # Build external dependencies with CMake
+        self.build_external_dependencies()
         
         super().run()
         print("✅ Build completed successfully!")
@@ -89,6 +93,97 @@ class ProgressBuildExt(build_ext):
                 raise FileNotFoundError(f"Required header not found: {header}")
         
         print("✅ External dependencies verified")
+    
+    def build_external_dependencies(self):
+        """Build external rl-tools dependencies using CMake."""
+        print("🔨 Building external rl-tools dependencies with CMake...")
+        
+        # Check if CMake is available
+        try:
+            subprocess.run(["cmake", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("⚠️ CMake not found. Skipping external dependency build.")
+            print("   This may cause segmentation faults during runtime.")
+            print("   To fix: install CMake and rebuild the package.")
+            return
+        
+        external_path = "external/rl-tools"
+        build_path = os.path.join(external_path, "build")
+        
+        # Create build directory
+        if os.path.exists(build_path):
+            shutil.rmtree(build_path)
+        os.makedirs(build_path, exist_ok=True)
+        
+        try:
+            # Configure CMake
+            print("   Configuring CMake...")
+            cmake_args = [
+                "cmake", "..",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DRL_TOOLS_ENABLE_TARGETS=OFF",
+                "-DRL_TOOLS_ENABLE_TESTS=OFF",
+                "-DRL_TOOLS_BACKEND_ENABLE_MKL=OFF",
+                "-DRL_TOOLS_BACKEND_ENABLE_ACCELERATE=OFF",
+                "-DRL_TOOLS_BACKEND_ENABLE_CUDA=OFF",
+                "-DRL_TOOLS_RL_ENVIRONMENTS_ENABLE_MUJOCO=OFF",
+                "-DRL_TOOLS_ENABLE_JSON=OFF",
+                "-DRL_TOOLS_ENABLE_CJSON=OFF",
+                "-DRL_TOOLS_ENABLE_BOOST_BEAST=OFF",
+                "-DRL_TOOLS_ENABLE_LIBWEBSOCKETS=OFF",
+                "-DRL_TOOLS_ENABLE_TRACY=OFF",
+                "-DRL_TOOLS_ENABLE_LTO=OFF",
+                "-DRL_TOOLS_DISABLE_FAST_MATH=OFF",
+                "-DRL_TOOLS_WARNINGS_AS_ERRORS=OFF",
+                "-DRL_TOOLS_DISABLE_CPU_SPECIFIC_OPTIMIZATIONS=ON"
+            ]
+            
+            result = subprocess.run(
+                cmake_args,
+                cwd=build_path,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                print(f"❌ CMake configuration failed:")
+                print(f"   stdout: {result.stdout}")
+                print(f"   stderr: {result.stderr}")
+                raise RuntimeError("CMake configuration failed")
+            
+            print("✅ CMake configuration successful")
+            
+            # Build with CMake
+            print("   Building with CMake...")
+            build_args = ["cmake", "--build", ".", "--config", "Release"]
+            
+            result = subprocess.run(
+                build_args,
+                cwd=build_path,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                print(f"❌ CMake build failed:")
+                print(f"   stdout: {result.stdout}")
+                print(f"   stderr: {result.stderr}")
+                raise RuntimeError("CMake build failed")
+            
+            print("✅ External dependencies built successfully")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"❌ CMake build failed: {e}")
+            raise
+        except FileNotFoundError:
+            print("❌ CMake not found. Please install CMake:")
+            if sys.platform == "darwin":
+                print("   brew install cmake")
+            elif sys.platform == "linux":
+                print("   sudo apt-get install cmake")
+            else:
+                print("   Install CMake from https://cmake.org/download/")
+            raise
     
     def build_extension(self, ext):
         print(f"🔨 Building extension: {ext.name}")
