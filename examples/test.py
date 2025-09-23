@@ -1,7 +1,7 @@
 from l2f import *
 import numpy as np
 import sys
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import copy
 
 
@@ -50,5 +50,5 @@ for step_i in range(100):
 
 
 
-plt.plot([s.position[2] for s in trajectory])
-plt.show()
+# plt.plot([s.position[2] for s in trajectory])
+# plt.show()
